@@ -1,0 +1,12 @@
+prefix               = "devops-vm"
+location             = "eastus"
+vm_size              = "Standard_B1s"
+admin_username       = "azureuser"
+allowed_ssh_cidr     = "203.0.113.10/32"
+admin_ssh_public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQ..."
+
+tags = {
+  environment = "dev"
+  owner       = "your-name"
+  project     = "devops-learning"
+}
