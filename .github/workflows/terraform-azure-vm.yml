@@ -26,6 +26,7 @@ on:
 permissions:
   id-token: write
   contents: read
+  administration: write
 
 jobs:
   terraform:
@@ -44,6 +45,23 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Configure OIDC subject claim
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          http_code=$(curl -sS -X PUT \\
+            -H "Authorization: Bearer $GH_TOKEN" \\
+            -H "Accept: application/vnd.github+json" \\
+            -H "X-GitHub-Api-Version: 2022-11-28" \\
+            "https://api.github.com/repos/${{ github.repository }}/actions/oidc/customization/sub" \\
+            -d '{"use_default":false,"include_claim_keys":["repo","context","ref"]}' \\
+            -o /dev/null -w '%{http_code}')
+          if [[ "$http_code" -lt 200 || "$http_code" -ge 300 ]]; then
+            echo "Failed to configure OIDC subject claim (HTTP $http_code)"
+            exit 1
+          fi
+          echo "OIDC subject claim configured successfully (HTTP $http_code)"
 
       - name: Azure Login (OIDC)
         uses: azure/login@v2
