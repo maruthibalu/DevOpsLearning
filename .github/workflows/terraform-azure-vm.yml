@@ -30,11 +30,18 @@ permissions:
 jobs:
   terraform:
     runs-on: ubuntu-latest
+    concurrency:
+      group: terraform-azure-vm
+      cancel-in-progress: false
     env:
       ARM_USE_OIDC: true
       ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
       ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
       ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      TF_STATE_RESOURCE_GROUP: ${{ vars.TF_STATE_RESOURCE_GROUP || 'rg-terraform-state' }}
+      TF_STATE_STORAGE_ACCOUNT: ${{ vars.TF_STATE_STORAGE_ACCOUNT || 'tfstate1304953421' }}
+      TF_STATE_CONTAINER: ${{ vars.TF_STATE_CONTAINER || 'tfstate' }}
+      TF_STATE_KEY: ${{ vars.TF_STATE_KEY || 'devops-vm.tfstate' }}
       TF_VAR_admin_ssh_public_key: ${{ secrets.TF_VAR_ADMIN_SSH_PUBLIC_KEY }}
       TF_VAR_admin_username: ${{ vars.TF_VAR_ADMIN_USERNAME || 'azureuser' }}
       TF_VAR_location: ${{ vars.TF_VAR_LOCATION || 'eastus' }}
@@ -52,11 +59,36 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+      - name: Validate SSH public key
+        shell: bash
+        run: |
+          if [[ -z "${TF_VAR_admin_ssh_public_key//[[:space:]]/}" ]]; then
+            echo "::error::Repository secret TF_VAR_ADMIN_SSH_PUBLIC_KEY is missing or empty."
+            exit 1
+          fi
+
+          key_file=$(mktemp)
+          trap 'rm -f "$key_file"' EXIT
+          chmod 600 "$key_file"
+          printf '%s\n' "$TF_VAR_admin_ssh_public_key" > "$key_file"
+
+          if ! ssh-keygen -l -f "$key_file" > /dev/null 2>&1; then
+            echo "::error::TF_VAR_ADMIN_SSH_PUBLIC_KEY is not a valid OpenSSH public key. Store the complete single-line contents of the .pub file."
+            exit 1
+          fi
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
       - name: Terraform Init
-        run: terraform -chdir=terraform init
+        run: |
+          terraform -chdir=terraform init -input=false \
+            -backend-config="resource_group_name=$TF_STATE_RESOURCE_GROUP" \
+            -backend-config="storage_account_name=$TF_STATE_STORAGE_ACCOUNT" \
+            -backend-config="container_name=$TF_STATE_CONTAINER" \
+            -backend-config="key=$TF_STATE_KEY" \
+            -backend-config="use_oidc=true" \
+            -backend-config="use_azuread_auth=true"
 
       - name: Terraform Fmt Check
         run: terraform -chdir=terraform fmt -check
@@ -66,12 +98,12 @@ jobs:
 
       - name: Terraform Plan
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.operation == 'plan' }}
-        run: terraform -chdir=terraform plan -out=tfplan
+        run: terraform -chdir=terraform plan -input=false -out=tfplan
 
       - name: Terraform Apply
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.operation == 'apply' }}
-        run: terraform -chdir=terraform apply -auto-approve
+        run: terraform -chdir=terraform apply -input=false -auto-approve
 
       - name: Terraform Destroy
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.operation == 'destroy' }}
-        run: terraform -chdir=terraform destroy -auto-approve
+        run: terraform -chdir=terraform destroy -input=false -auto-approve

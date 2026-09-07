@@ -38,7 +38,22 @@ Repository secrets:
 - `AZURE_CLIENT_ID`
 - `AZURE_TENANT_ID`
 - `AZURE_SUBSCRIPTION_ID`
-- `TF_VAR_ADMIN_SSH_PUBLIC_KEY` (the full SSH public key string)
+- `TF_VAR_ADMIN_SSH_PUBLIC_KEY` (the complete single-line contents of the public `.pub` file)
+
+On Windows, display an existing public key with:
+
+```powershell
+Get-Content "$HOME\.ssh\id_ed25519.pub"
+```
+
+If the file does not exist, create a key pair first:
+
+```powershell
+ssh-keygen -t ed25519 -C "github-actions-vm"
+```
+
+Copy the output from the `.pub` file into the GitHub repository secret. Do not
+use the private key file (`id_ed25519`), its file path, or surrounding quotes.
 
 Optional repository variables:
 
@@ -53,6 +68,7 @@ Terraform state bootstrap variables:
 - `TF_STATE_RESOURCE_GROUP` (optional; defaults to `rg-terraform-state`)
 - `TF_STATE_CONTAINER` (optional; defaults to `tfstate`)
 - `TF_STATE_LOCATION` (optional; defaults to `TF_VAR_LOCATION`, then `eastus`)
+- `TF_STATE_KEY` (optional; defaults to `devops-vm.tfstate`)
 
 ## 3) Bootstrap Terraform state storage
 
@@ -69,6 +85,8 @@ The workflow creates a private `StorageV2` account with HTTPS-only access,
 TLS 1.2 minimum, public blob access disabled, and shared-key access disabled.
 It creates the state container and grants the service principal identified by
 `AZURE_CLIENT_ID` the `Storage Blob Data Contributor` role at container scope.
+The VM workflow uses this container as its AzureRM backend and authenticates to
+it with GitHub OIDC; storage account keys are not used.
 
 After the workflow succeeds, remove any bootstrap permissions that are no
 longer needed. The container-scoped data role must remain for Terraform.
@@ -107,7 +125,12 @@ has at least the `Reader` role at the target scope.
 ```powershell
 cd terraform
 copy terraform.tfvars.example terraform.tfvars
-terraform init
+terraform init `
+  -backend-config="resource_group_name=rg-terraform-state" `
+  -backend-config="storage_account_name=tfstate1304953421" `
+  -backend-config="container_name=tfstate" `
+  -backend-config="key=devops-vm.tfstate" `
+  -backend-config="use_azuread_auth=true"
 terraform plan
 terraform apply
 ```
