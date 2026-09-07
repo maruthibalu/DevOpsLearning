@@ -45,6 +45,7 @@ jobs:
       TF_VAR_admin_ssh_public_key: ${{ secrets.TF_VAR_ADMIN_SSH_PUBLIC_KEY }}
       TF_VAR_admin_username: ${{ vars.TF_VAR_ADMIN_USERNAME || 'azureuser' }}
       TF_VAR_location: ${{ vars.TF_VAR_LOCATION || 'eastus' }}
+      TF_VAR_vm_size: ${{ vars.TF_VAR_VM_SIZE || 'Standard_B1s' }}
       TF_VAR_allowed_ssh_cidr: ${{ vars.TF_VAR_ALLOWED_SSH_CIDR || '0.0.0.0/0' }}
       TF_VAR_prefix: ${{ vars.TF_VAR_PREFIX || 'devops-vm' }}
 
@@ -58,6 +59,60 @@ jobs:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Select available VM SKU
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.operation != 'destroy' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          selected_size=""
+          candidate_sizes=(
+            "$TF_VAR_vm_size"
+            "Standard_B1s"
+            "Standard_B2s"
+            "Standard_D2s_v5"
+          )
+          declare -A checked_sizes=()
+
+          for sku in "${candidate_sizes[@]}"; do
+            if [[ -n "${checked_sizes[$sku]:-}" ]]; then
+              continue
+            fi
+            checked_sizes["$sku"]=1
+
+            available_size=$(az vm list-skus \
+              --location "$TF_VAR_location" \
+              --size "$sku" \
+              --all \
+              --query "[?name=='${sku}' && resourceType=='virtualMachines' && length(restrictions)==\`0\`].name | [0]" \
+              --output tsv)
+
+            if [[ -n "$available_size" ]]; then
+              selected_size="$available_size"
+              break
+            fi
+
+            echo "VM SKU $sku is unavailable in $TF_VAR_location."
+          done
+
+          if [[ -z "$selected_size" ]]; then
+            echo "::error::None of the allowed VM SKUs are available in $TF_VAR_location."
+            az vm list-skus \
+              --location "$TF_VAR_location" \
+              --size Standard_D \
+              --all \
+              --output table
+            exit 1
+          fi
+
+          echo "Selected VM SKU: $selected_size"
+          echo "TF_VAR_vm_size=$selected_size" >> "$GITHUB_ENV"
+          {
+            echo "### VM SKU selection"
+            echo "- Location: \`$TF_VAR_location\`"
+            echo "- Selected SKU: \`$selected_size\`"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Validate SSH public key
         shell: bash

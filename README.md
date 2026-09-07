@@ -59,8 +59,17 @@ Optional repository variables:
 
 - `TF_VAR_PREFIX`
 - `TF_VAR_LOCATION`
+- `TF_VAR_VM_SIZE` (preferred size; defaults to `Standard_B1s`)
 - `TF_VAR_ADMIN_USERNAME`
 - `TF_VAR_ALLOWED_SSH_CIDR` (set this to your IP/CIDR for better security)
+
+Before Terraform plan or apply runs, the VM workflow checks subscription
+availability in the configured location. It tries `TF_VAR_VM_SIZE`, then the
+bounded fallback list `Standard_B1s`, `Standard_B2s`, and `Standard_D2s_v5`.
+The first unrestricted SKU is exported to Terraform. If none are available,
+the workflow fails and prints the available `Standard_D` SKU table. Destroy
+does not run this check because deleting the existing VM does not require a
+currently available deployment SKU.
 
 Terraform state bootstrap variables:
 
