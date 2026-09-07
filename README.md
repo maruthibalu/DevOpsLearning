@@ -57,7 +57,26 @@ Use the workflow in Actions named "Terraform Azure VM":
   - `apply`
   - `destroy`
 
-## 4) Run locally (optional)
+## 4) Test OIDC with Python
+
+Run the workflow named **Test Azure OIDC with Python** from the GitHub Actions
+tab. It performs a read-only connectivity test:
+
+1. GitHub requests an OIDC token.
+2. `azure/login` exchanges it for Azure credentials.
+3. Python uses `AzureCliCredential` to read the configured subscription.
+4. Python lists the resource groups visible to the service principal.
+
+The workflow does not create, update, or delete Azure resources. A successful
+run prints `OIDC authentication succeeded`, the subscription name, and the
+number of visible resource groups.
+
+If login fails, confirm that the federated credential subject matches
+`repo:maruthibalu/DevOpsLearning:ref:refs/heads/main`. Also confirm that the
+three Azure repository secrets are configured and that the service principal
+has at least the `Reader` role at the target scope.
+
+## 5) Run locally (optional)
 
 ```powershell
 cd terraform

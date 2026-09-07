@@ -1,0 +1,2 @@
+azure-identity>=1.25.0,<2
+azure-mgmt-resource>=24.0.0,<25
