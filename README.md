@@ -25,16 +25,14 @@ Recommended federated credential values:
 
 - Issuer: `https://token.actions.githubusercontent.com`
 - Audience: `api://AzureADTokenExchange`
-- Subject examples:
-  - `repo:<OWNER>@<OWNER_ID>/<REPO>@<REPO_ID>:ref:refs/heads/main`
-  - `repo:<OWNER>@<OWNER_ID>/<REPO>@<REPO_ID>:pull_request`
+- Subject: copy the exact `subject claim` value from the workflow log's
+  "Federated token details" output for the branch or event you want to allow.
 
 This repository uses GitHub's immutable OIDC subject format, which includes the
-repository owner ID and repository ID. Substitute the exact owner/repository IDs
-from the workflow log's "Federated token details" or from the GitHub repository
-API before creating the Azure federated credential. Azure login fails with
-`AADSTS700213` if the federated credential is configured with the legacy subject
-format (`repo:<ORG>/<REPO>:...`) instead of the immutable subject shown above.
+repository owner ID and repository ID. Azure login fails with `AADSTS700213` if
+the federated credential is configured with the legacy subject format
+(`repo:<ORG>/<REPO>:...`) instead of the exact immutable subject emitted by the
+workflow.
 
 Grant the service principal at least `Contributor` role on your target subscription or resource group.
 
