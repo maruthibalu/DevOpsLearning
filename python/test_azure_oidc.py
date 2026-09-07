@@ -1,10 +1,16 @@
 import logging
 import os
 
-from azure.core.exceptions import ClientAuthenticationError, HttpResponseError
-from azure.identity import AzureCliCredential
-from azure.mgmt.resource import ResourceManagementClient
-from azure.mgmt.resource.subscriptions import SubscriptionClient
+try:
+    from azure.core.exceptions import ClientAuthenticationError, HttpResponseError
+    from azure.identity import AzureCliCredential
+    from azure.mgmt.resource import ResourceManagementClient
+    from azure.mgmt.resource.subscriptions import SubscriptionClient
+except ImportError as exc:
+    raise ImportError(
+        "Required Azure SDK packages are missing. Install them with: "
+        "pip install azure-core azure-identity azure-mgmt-resource"
+    ) from exc
 
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
