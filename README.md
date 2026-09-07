@@ -27,7 +27,9 @@ Recommended federated credential values:
 - Audience: `api://AzureADTokenExchange`
 - Subject: use the exact immutable *subject claim* value for the branch or
   event you want to allow. Copy it from the repository's GitHub Actions OIDC
-  settings/API, or from the workflow log's "Federated token details" output.
+  settings/API
+  (`https://api.github.com/repos/{owner}/{repo}/actions/oidc/customization/sub`),
+  or from the `Azure Login (OIDC)` step's "Federated token details" log output.
 
 This repository uses GitHub's immutable OIDC subject format, which includes the
 repository owner ID and repository ID. Azure login fails with `AADSTS700213` if
