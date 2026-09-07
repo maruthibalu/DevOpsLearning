@@ -1,0 +1,84 @@
+name: Bootstrap Terraform State Storage
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    env:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      TF_STATE_RESOURCE_GROUP: ${{ vars.TF_STATE_RESOURCE_GROUP || 'rg-terraform-state' }}
+      TF_STATE_STORAGE_ACCOUNT: ${{ vars.TF_STATE_STORAGE_ACCOUNT || 'tfstate1304953421' }}
+      TF_STATE_CONTAINER: ${{ vars.TF_STATE_CONTAINER || 'tfstate' }}
+      TF_STATE_LOCATION: ${{ vars.TF_STATE_LOCATION || vars.TF_VAR_LOCATION || 'eastus' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Create Terraform state storage
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          az group create \
+            --name "$TF_STATE_RESOURCE_GROUP" \
+            --location "$TF_STATE_LOCATION" \
+            --output none
+
+          az storage account create \
+            --name "$TF_STATE_STORAGE_ACCOUNT" \
+            --resource-group "$TF_STATE_RESOURCE_GROUP" \
+            --location "$TF_STATE_LOCATION" \
+            --sku Standard_LRS \
+            --kind StorageV2 \
+            --https-only true \
+            --min-tls-version TLS1_2 \
+            --allow-blob-public-access false \
+            --allow-shared-key-access false \
+            --output none
+
+          storage_id=$(az storage account show \
+            --name "$TF_STATE_STORAGE_ACCOUNT" \
+            --resource-group "$TF_STATE_RESOURCE_GROUP" \
+            --query id \
+            --output tsv)
+          container_scope="${storage_id}/blobServices/default/containers/${TF_STATE_CONTAINER}"
+
+          az rest \
+            --method put \
+            --url "https://management.azure.com${container_scope}?api-version=2024-01-01" \
+            --body '{"properties":{"publicAccess":"None"}}' \
+            --output none
+
+          principal_id=$(az ad sp show \
+            --id "$AZURE_CLIENT_ID" \
+            --query id \
+            --output tsv)
+
+          assignment_id=$(az role assignment list \
+            --scope "$container_scope" \
+            --query "[?principalId=='${principal_id}' && roleDefinitionName=='Storage Blob Data Contributor'].id | [0]" \
+            --output tsv)
+
+          if [[ -z "$assignment_id" ]]; then
+            az role assignment create \
+              --assignee-object-id "$principal_id" \
+              --assignee-principal-type ServicePrincipal \
+              --role "Storage Blob Data Contributor" \
+              --scope "$container_scope" \
+              --output none
+          fi

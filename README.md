@@ -47,7 +47,33 @@ Optional repository variables:
 - `TF_VAR_ADMIN_USERNAME`
 - `TF_VAR_ALLOWED_SSH_CIDR` (set this to your IP/CIDR for better security)
 
-## 3) Run with GitHub Actions
+Terraform state bootstrap variables:
+
+- `TF_STATE_STORAGE_ACCOUNT` (optional; defaults to `tfstate1304953421`)
+- `TF_STATE_RESOURCE_GROUP` (optional; defaults to `rg-terraform-state`)
+- `TF_STATE_CONTAINER` (optional; defaults to `tfstate`)
+- `TF_STATE_LOCATION` (optional; defaults to `TF_VAR_LOCATION`, then `eastus`)
+
+## 3) Bootstrap Terraform state storage
+
+Before configuring the Terraform Azure Blob backend, run the manually triggered
+workflow named **Bootstrap Terraform State Storage**.
+
+The OIDC service principal needs these temporary bootstrap permissions:
+
+- `Contributor` on the subscription or target resource group, to create storage.
+- `Role Based Access Control Administrator` on the subscription or target
+  resource group, to grant the data-plane role.
+
+The workflow creates a private `StorageV2` account with HTTPS-only access,
+TLS 1.2 minimum, public blob access disabled, and shared-key access disabled.
+It creates the state container and grants the service principal identified by
+`AZURE_CLIENT_ID` the `Storage Blob Data Contributor` role at container scope.
+
+After the workflow succeeds, remove any bootstrap permissions that are no
+longer needed. The container-scoped data role must remain for Terraform.
+
+## 4) Run with GitHub Actions
 
 Use the workflow in Actions named "Terraform Azure VM":
 
@@ -57,7 +83,7 @@ Use the workflow in Actions named "Terraform Azure VM":
   - `apply`
   - `destroy`
 
-## 4) Test OIDC with Python
+## 5) Test OIDC with Python
 
 Run the workflow named **Test Azure OIDC with Python** from the GitHub Actions
 tab. It performs a read-only connectivity test:
@@ -76,7 +102,7 @@ If login fails, confirm that the federated credential subject matches
 three Azure repository secrets are configured and that the service principal
 has at least the `Reader` role at the target scope.
 
-## 5) Run locally (optional)
+## 6) Run locally (optional)
 
 ```powershell
 cd terraform
