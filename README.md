@@ -25,7 +25,7 @@ Recommended federated credential values:
 
 - Issuer: `https://token.actions.githubusercontent.com`
 - Audience: `api://AzureADTokenExchange`
-- Subject: use the exact immutable `subject claim` value for the branch or
+- Subject: use the exact immutable *subject claim* value for the branch or
   event you want to allow. Copy it from the repository's GitHub Actions OIDC
   settings/API, or from the workflow log's "Federated token details" output.
 
