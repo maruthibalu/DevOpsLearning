@@ -1,0 +1,75 @@
+name: Terraform Platform Landing Zone
+
+on:
+  pull_request:
+    paths:
+      - "landing-zone/**"
+      - "modules/**"
+      - ".github/workflows/terraform-landing-zone.yml"
+
+  push:
+    branches:
+      - main
+    paths:
+      - "landing-zone/**"
+      - "modules/**"
+      - ".github/workflows/terraform-landing-zone.yml"
+
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  terraform:
+    name: Validate and deploy landing zone
+    runs-on: ubuntu-latest
+
+    concurrency:
+      group: terraform-platform-landing-zone
+      cancel-in-progress: false
+
+    env:
+      ARM_USE_OIDC: true
+      ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      
+      TF_STATE_RESOURCE_GROUP: ${{ vars.TF_STATE_RESOURCE_GROUP || 'rg-terraform-state' }}
+      TF_STATE_STORAGE_ACCOUNT: ${{ vars.TF_STATE_STORAGE_ACCOUNT || 'tfstate1304953421' }}
+      TF_STATE_CONTAINER: ${{ vars.TF_STATE_CONTAINER || 'tfstate' }}
+      TF_STATE_KEY: ${{ vars.LANDING_ZONE_TF_STATE_KEY || 'platform-landing-zone.tfstate' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4 
+
+      - name: Azure Login with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Format Check
+        run: |
+          terraform fmt -check -recursive landing-zone
+          terraform fmt -check -recursive modules
+        
+      - name: Terraform Init
+        run: |
+          terraform -chdir=landing-zone init -input=false \
+            -backend-config="resource_group_name=${{ env.TF_STATE_RESOURCE_GROUP }}" \
+            -backend-config="storage_account_name=${{ env.TF_STATE_STORAGE_ACCOUNT }}" \
+            -backend-config="container_name=${{ env.TF_STATE_CONTAINER }}" \
+            -backend-config="key=${{ env.TF_STATE_KEY }}" \
+            -backend-config="use_oidc=true" \
+            -backend-config="use_azuread_auth=true"
+
+      - name: Terraform Validate
+        run: terraform -chdir=landing-zone validate
+        
