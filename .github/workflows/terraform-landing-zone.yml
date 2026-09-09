@@ -16,6 +16,16 @@ on:
       - ".github/workflows/terraform-landing-zone.yml"
 
   workflow_dispatch:
+    inputs:
+      operation:
+        description: 'Terraform operation to perform'
+        required: true
+        default: 'plan'
+        type: choice
+        options:
+          - plan
+          - apply
+          - destroy
 
 permissions:
   id-token: write
@@ -72,4 +82,8 @@ jobs:
 
       - name: Terraform Validate
         run: terraform -chdir=landing-zone validate
+      
+      - name: Terraform Plan
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.operation == 'plan' || inputs.operation == 'apply' }}
+        run: terraform -chdir=landing-zone plan -input=false -out=tfplan
         
